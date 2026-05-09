@@ -1,6 +1,8 @@
-const BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
+const BASE = '/api';
+const COLD_START_RETRIES = 6;   // 6 × 5 s = 30 s max (Render free cold-start)
+const COLD_START_DELAY_MS = 5000;
 
-async function request(method, path, body) {
+async function request(method, path, body, _retries = COLD_START_RETRIES) {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : {},
@@ -9,6 +11,19 @@ async function request(method, path, body) {
   });
 
   if (res.status === 204) return null;
+
+  // Render free tier returns an HTML page while cold-starting.
+  // Retry transparently until the server is ready.
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    if (_retries > 0) {
+      await new Promise((r) => setTimeout(r, COLD_START_DELAY_MS));
+      return request(method, path, body, _retries - 1);
+    }
+    const err = new Error('Server is starting up — please refresh in a moment.');
+    err.status = 503;
+    throw err;
+  }
 
   const data = await res.json();
   if (!res.ok) {

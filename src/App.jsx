@@ -8,14 +8,21 @@ import './styles/tokens.css';
 export default function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    let warmTimer = setTimeout(() => setWarmingUp(true), 3000);
     authApi.me()
       .then(setUser)
       .catch(() => setUser(null))
-      .finally(() => setAuthChecked(true));
+      .finally(() => {
+        clearTimeout(warmTimer);
+        setWarmingUp(false);
+        setAuthChecked(true);
+      });
+    return () => clearTimeout(warmTimer);
   }, []);
 
   async function handleLogout() {
@@ -28,7 +35,7 @@ export default function App() {
     setRefreshKey((k) => k + 1);
   }
 
-  if (!authChecked) return <LoadingScreen />;
+  if (!authChecked) return <LoadingScreen warmingUp={warmingUp} />;
   if (!user) return <AuthForm onAuth={setUser} />;
 
   const initials = user.name
@@ -140,7 +147,7 @@ export default function App() {
   );
 }
 
-function LoadingScreen() {
+function LoadingScreen({ warmingUp }) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -154,9 +161,20 @@ function LoadingScreen() {
         fontSize: 24, color: '#fff',
         animation: 'spin 2s linear infinite',
       }}>✦</div>
-      <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', fontWeight: 500 }}>
-        Loading TaskFlow…
-      </span>
+      {warmingUp ? (
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          <span style={{ color: 'var(--color-text)', fontSize: 'var(--font-sm)', fontWeight: 600 }}>
+            Server is warming up…
+          </span>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-xs)', maxWidth: 280 }}>
+            Free servers sleep after inactivity. This takes up to 30 seconds on first visit.
+          </span>
+        </div>
+      ) : (
+        <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-sm)', fontWeight: 500 }}>
+          Loading TaskFlow…
+        </span>
+      )}
     </div>
   );
 }
