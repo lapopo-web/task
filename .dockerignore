@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+coverage
+.nyc_output
+playwright-report
+test-results
+.git
+.gitignore
+*.md
+!README.md
+docs
+prompts

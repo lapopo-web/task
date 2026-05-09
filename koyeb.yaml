@@ -1,0 +1,42 @@
+name: taskflow
+services:
+  - name: web
+    type: web
+    git:
+      repository: github.com/${{ env.GITHUB_REPOSITORY }}
+      branch: main
+    docker:
+      dockerfile: Dockerfile
+    instance_type: free
+    regions:
+      - fra
+    ports:
+      - port: 8080
+        protocol: http
+    routes:
+      - path: /
+        port: 8080
+    health_checks:
+      - path: /health
+        port: 8080
+        initial_delay_seconds: 10
+        period_seconds: 30
+    env:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: DATABASE_URL
+        secret: TASKFLOW_DATABASE_URL
+      - key: JWT_SECRET
+        secret: TASKFLOW_JWT_SECRET
+      - key: RESEND_API_KEY
+        secret: TASKFLOW_RESEND_API_KEY
+      - key: UPSTASH_REDIS_URL
+        secret: TASKFLOW_UPSTASH_REDIS_URL
+      - key: CORS_ORIGIN
+        secret: TASKFLOW_CORS_ORIGIN
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_DOMAIN
+        secret: TASKFLOW_COOKIE_DOMAIN

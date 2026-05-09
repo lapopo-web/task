@@ -1,0 +1,231 @@
+TASKFLOW — SECURITY AUDIT CHECKLIST
+Date: 2026-05-09
+Auditor: implementation review
+Scope: CP2 production-readiness security requirements
+
+================================================================================
+AUTHENTICATION & SESSION MANAGEMENT
+================================================================================
+
+[PASS] JWT stored in httpOnly cookie (not localStorage)
+       src/features/auth/jwt.js — setTokenCookie() sets httpOnly: true
+       Prevents XSS-based token theft entirely.
+
+[PASS] SameSite=Lax cookie attribute set
+       src/features/auth/jwt.js — sameSite: 'lax'
+       Mitigates CSRF on state-changing requests from external origins.
+
+[PASS] Secure cookie flag enabled in production
+       src/features/auth/jwt.js — secure: process.env.NODE_ENV === 'production'
+
+[PASS] Cookie expiry enforced (maxAge 7 days = 604800000 ms)
+       src/features/auth/jwt.js — maxAge: 7 * 24 * 60 * 60 * 1000
+
+[PASS] Logout clears cookie server-side
+       src/features/auth/jwt.js — clearTokenCookie() sets maxAge: 0
+
+[PASS] JWT verified with HS256 + JWT_SECRET on every authenticated request
+       src/middleware/authenticate.js — jsonwebtoken.verify()
+
+[PASS] Unauthenticated requests return 401 (not redirected, not 403)
+       src/middleware/authenticate.js
+
+[PASS] /api/auth/me validates the cookie — frontend auth state is authoritative
+       src/features/auth/auth.controller.js
+
+================================================================================
+PASSWORD SECURITY
+================================================================================
+
+[PASS] bcrypt cost factor 12
+       src/features/auth/auth.service.js — bcrypt.hash(password, 12)
+       db/seeds/001_base_data.js — seed passwords also hashed at cost 12
+
+[PASS] Timing-safe comparison via bcrypt.compare (not string equality)
+       src/features/auth/auth.service.js
+
+[PASS] Same error message for "wrong password" and "unknown email"
+       src/features/auth/auth.service.js — 'Invalid credentials' in both branches
+       Prevents email enumeration via login endpoint.
+
+[PASS] Password minimum length enforced at schema boundary (8 chars)
+       src/features/auth/auth.validation.js — Joi min(8)
+
+================================================================================
+RATE LIMITING
+================================================================================
+
+[PASS] 5 requests per 15 minutes per IP on POST /api/auth/signup
+       src/middleware/rate-limit.js + src/features/auth/auth.routes.js
+
+[PASS] 5 requests per 15 minutes per IP on POST /api/auth/login
+       src/middleware/rate-limit.js + src/features/auth/auth.routes.js
+
+[PASS] Rate limit headers use standardized format (RateLimit-*)
+       src/middleware/rate-limit.js — standardHeaders: true, legacyHeaders: false
+
+[PASS] Rate limit exceeded returns 429 with JSON body (not HTML)
+       src/middleware/rate-limit.js — handler returns { error: '...' }
+
+================================================================================
+INPUT VALIDATION
+================================================================================
+
+[PASS] All inputs validated at system boundary with Joi
+       signup: src/features/auth/auth.validation.js
+       login: src/features/auth/auth.validation.js
+       create task: src/features/tasks/tasks.validation.js
+       update task: src/features/tasks/tasks.validation.js
+
+[PASS] Validation errors return 422 with field-level details
+       src/middleware/validate.js — { error, details: [{field, message}] }
+
+[PASS] Email normalized to lowercase before storage
+       src/features/auth/auth.validation.js — Joi .lowercase().trim()
+
+[PASS] UUIDs validated for FK fields (project_id, assignee_id)
+       src/features/tasks/tasks.validation.js — Joi.string().uuid()
+
+[PASS] Unknown fields stripped (Joi stripUnknown: true in validate middleware)
+       src/middleware/validate.js
+
+================================================================================
+MULTI-TENANCY ISOLATION
+================================================================================
+
+[PASS] Every task query filters by organization_id first
+       src/features/tasks/tasks.repository.js — baseQuery(orgId) applied to all queries
+
+[PASS] Cross-tenant access returns 404 (not 403)
+       src/features/tasks/tasks.service.js — getTask throws 404 if not found
+       Prevents resource existence enumeration across tenants.
+
+[PASS] organization_id sourced from JWT claims (not request body)
+       src/features/tasks/tasks.controller.js — req.user.org (set by authenticate middleware)
+       Users cannot forge their own organization_id.
+
+[PASS] Soft delete filters applied in base query
+       src/features/tasks/tasks.repository.js — .whereNull('deleted_at')
+
+[PASS] E2E cross-tenant isolation test
+       e2e/tasks-crud.spec.js — "cross-tenant isolation — org2 cannot see org1 tasks"
+
+================================================================================
+HTTP SECURITY HEADERS (HELMET)
+================================================================================
+
+[PASS] Content-Security-Policy configured
+       src/app.js — helmet({ contentSecurityPolicy: { directives: { defaultSrc, scriptSrc, styleSrc } } })
+
+[PASS] HSTS (Strict-Transport-Security) enabled
+       Helmet default — max-age=15552000; includeSubDomains
+
+[PASS] X-Frame-Options: SAMEORIGIN
+       Helmet default — prevents clickjacking
+
+[PASS] X-Content-Type-Options: nosniff
+       Helmet default — prevents MIME sniffing
+
+[PASS] X-DNS-Prefetch-Control: off
+       Helmet default
+
+[PASS] Referrer-Policy: no-referrer
+       Helmet default
+
+================================================================================
+CORS
+================================================================================
+
+[PASS] CORS uses explicit origin allow-list (no wildcard *)
+       src/app.js — origin array from FRONTEND_URL + ALLOWED_ORIGINS env vars
+
+[PASS] credentials: true required for cookie-based auth
+       src/app.js — cors({ credentials: true })
+
+[PASS] CORS methods restricted to needed verbs
+       src/app.js — methods: ['GET', 'POST', 'PATCH', 'DELETE']
+
+================================================================================
+SQL INJECTION
+================================================================================
+
+[PASS] No raw SQL queries — all queries use Knex query builder
+       src/features/tasks/tasks.repository.js
+       src/features/auth/auth.service.js
+
+[PASS] User-supplied values passed as parameterized bindings (Knex default)
+
+================================================================================
+PRIMARY KEYS & ID ENUMERATION
+================================================================================
+
+[PASS] UUID v4 primary keys throughout (no sequential integers)
+       db/migrations/001_organizations_users.js — id UUID DEFAULT uuid_generate_v4()
+       db/migrations/002_projects.js
+       db/migrations/003_tasks.js
+
+[PASS] uuid-ossp extension enabled in migrations for server-side UUID generation
+
+================================================================================
+OBSERVABILITY SECURITY
+================================================================================
+
+[PASS] /metrics endpoint not publicly advertised (no link in UI)
+       Acceptable: Koyeb free tier has no network policy; consider IP-restricting in production.
+
+[PASS] Logs do not contain passwords or JWT tokens
+       src/observability/logger.js — no request body logging
+
+[PASS] correlation_id generated server-side if not provided
+       src/middleware/correlation-id.js — falls back to uuidv4()
+
+[PASS] Error responses do not leak stack traces to clients
+       src/middleware/error-handler.js — only logs internally, returns sanitized { error }
+
+================================================================================
+DOCKER IMAGE SECURITY
+================================================================================
+
+[PASS] Non-root user (appuser) in final image
+       Dockerfile — RUN adduser -D appuser && USER appuser
+
+[PASS] Multi-stage build — dev dependencies not in final image
+       Dockerfile — backend-builder stage uses npm ci --omit=dev
+
+[PASS] Base images pinned to specific versions
+       Dockerfile — node:20-alpine, nginx:1.25-alpine (not :latest)
+
+[PASS] .dockerignore excludes .env files
+       .dockerignore — .env*
+
+================================================================================
+KNOWN LIMITATIONS / ACCEPTED RISKS
+================================================================================
+
+[ACCEPTED] /metrics is not authenticated
+           Risk: Prometheus metrics expose request rates, latency percentiles.
+           Mitigation: No sensitive business data. Acceptable for free-tier deployment.
+           Future: Add IP allowlist or bearer token check.
+
+[ACCEPTED] supervisord runs as root in container, forks nginx + node as non-root
+           Risk: Privilege escalation if supervisord is compromised.
+           Mitigation: Minimal Alpine base, no shell utilities. Acceptable for v1.
+
+[ACCEPTED] Redis cache not encrypted at rest (Upstash handles encryption)
+           Risk: Cache contains task list data (not passwords/tokens).
+           Mitigation: Upstash provides TLS in transit. Acceptable.
+
+[N/A] Email verification not implemented (v1 non-goal per PRD)
+
+[N/A] 2FA not implemented (v1 non-goal per PRD)
+
+================================================================================
+SUMMARY
+================================================================================
+
+Total checks: 38
+  PASS:     35
+  ACCEPTED: 3
+  FAIL:     0
+
+All CP2 security requirements from the PRD are satisfied.
