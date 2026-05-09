@@ -1,9 +1,11 @@
 const jwt = require('jsonwebtoken');
 
+const isProd = process.env.COOKIE_SECURE === 'true';
+
 const COOKIE_OPTS = {
   httpOnly: true,
-  sameSite: 'lax',
-  secure: process.env.COOKIE_SECURE === 'true',
+  sameSite: isProd ? 'none' : 'lax',
+  secure: isProd,
   domain: process.env.COOKIE_DOMAIN || 'localhost',
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
