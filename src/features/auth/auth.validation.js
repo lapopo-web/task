@@ -2,13 +2,13 @@ const Joi = require('joi');
 
 const signupSchema = Joi.object({
   name: Joi.string().min(2).max(100).required(),
-  email: Joi.string().email().lowercase().required(),
+  email: Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
   password: Joi.string().min(8).max(128).required(),
   organizationName: Joi.string().min(2).max(100).required(),
 });
 
 const loginSchema = Joi.object({
-  email: Joi.string().email().lowercase().required(),
+  email: Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
   password: Joi.string().required(),
 });
 

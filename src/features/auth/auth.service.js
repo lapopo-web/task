@@ -51,4 +51,12 @@ async function login({ email, password }) {
   return user;
 }
 
-module.exports = { signup, login };
+async function getById(id) {
+  return db('users')
+    .select('id', 'email', 'name', 'role', 'organization_id')
+    .where({ id })
+    .whereNull('deleted_at')
+    .first();
+}
+
+module.exports = { signup, login, getById };

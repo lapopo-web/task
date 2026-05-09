@@ -28,8 +28,14 @@ function logout(req, res) {
   res.json({ message: 'Logged out' });
 }
 
-function me(req, res) {
-  res.json({ id: req.user.sub, org: req.user.org, role: req.user.role });
+async function me(req, res, next) {
+  try {
+    const user = await authService.getById(req.user.sub);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ id: user.id, email: user.email, name: user.name, role: user.role, org: req.user.org });
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = { signup, login, logout, me };

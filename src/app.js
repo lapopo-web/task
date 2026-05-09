@@ -49,7 +49,7 @@ app.use(pinoHttp({
   },
 }));
 
-app.get('/health', healthcheck);
+app.get('/healthz', healthcheck);
 
 app.get('/metrics', async (req, res) => {
   res.set('Content-Type', register.contentType);
