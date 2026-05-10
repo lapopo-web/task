@@ -28,7 +28,10 @@ app.use(helmet({
   },
 }));
 
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',');
+const allowedOrigins = [
+  ...(process.env.CORS_ORIGIN || 'http://localhost:5173').split(','),
+  'https://task-indol-seven.vercel.app',
+].map((o) => o.trim()).filter(Boolean);
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
